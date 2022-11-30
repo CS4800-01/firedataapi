@@ -29,7 +29,7 @@ def get_averages(dbconnect, day):
     properDate = {"01": "1", "02": "2", "03": "3", "04": "2", "04": "2", "05": "2", "06": "6", "07": "7", "08": "8", "09": "9"}
 
     # parsing date input for search
-    parsedDate = re.search(r'^(\d{1,2})\/(\d{1,2})\/(\d{4})$', day)
+    parsedDate = re.search(r'^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$', day)
 
     if parsedDate[1] not in properDate.keys():
         month = parsedDate[1]
@@ -43,7 +43,7 @@ def get_averages(dbconnect, day):
 
     # getting substring to search in database
     dates = (month + "/" + day + "/%")   # eg dates = 9/2 then day = 9/2/*
-    dbconnect.execute("SELECT * from historical_data WHERE date like %s", [dates])
+    dbconnect.execute("SELECT precip, avg_air_tmp, avg_rel_hum from historical_data WHERE date like %s", [dates])
     # fetching all results
     data = dbconnect.fetchall()
 
@@ -51,12 +51,12 @@ def get_averages(dbconnect, day):
     avg_precip, avg_air_temp, avg_hum, cnt = 0, 0, 0, 0
     for row in data:
         # Add values if not None
-        if row[8]:
-            avg_precip += float(row[8])
-        if row[15]:
-            avg_air_temp += float(row[15])
-        if row[18]:
-            avg_hum += float(row[18])
+        if row[0]:
+            avg_precip += float(row[0])
+        if row[1]:
+            avg_air_temp += float(row[1])
+        if row[2]:
+            avg_hum += float(row[2])
         cnt = cnt + 1
 
     # rounding to two decimal places because python ugly about it and getting average by dividing by num of rows
@@ -166,7 +166,7 @@ def lambda_handler(event, context):
 
         # testrun
         numdate = "09/03/2052"
-        dates = get_averages(dbcnx, numdate)
+        precip, air, hum = get_averages(dbcnx, numdate)
 
         # tofindthetablenameorcolumnsofthehistoricaldatatable
         # dbcnx.execute("SHOWcolumnsFROM`historical_data`")
