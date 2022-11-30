@@ -2,34 +2,8 @@ import sys
 import json
 import mysql.connector
 from mysql.connector import errorcode
-
-
-def fetch_all_records(dbconnect):
-    dbconnect.execute("SELECT * FROM locations")
-    myresult = dbconnect.fetchall()
-    return myresult
-
-
-def fetch_single_record(dbconnect, id):
-    dbconnect.execute("SELECT * FROM locations WHERE id='%s'", [id])
-    myresult = dbconnect.fetchall()
-    return myresult
-
-
-def get_locations_near(dbconnect, lat, long, n):
-    dbconnect.execute(
-        "SELECT DISTINCT a.*, ( 3959 * acos( cos( radians('35.9046545') ) * cos( radians( a.latitude ) ) * cos( radians( a.longitude ) - radians(%s) ) + sin( radians(%s) ) * sin( radians( a.latitude ) ) ) ) AS distance FROM location_test a WHERE (((SELECT enabled FROM location_test b WHERE id=a.parent_id LIMIT 1) != 1 OR (a.parent_id IS NULL OR a.parent_id='') AND enabled = 1)) HAVING distance < '100000' ORDER BY distance ASC LIMIT %s",
-        (long, lat, n))
-    myresult = dbconnect.fetchall()
-    return myresult
-
-import sys
-import json
-import mysql.connector
-from mysql.connector import errorcode
 import re
 
-
 def fetch_all_records(dbconnect):
     dbconnect.execute("SELECT * FROM locations")
     myresult = dbconnect.fetchall()
@@ -48,6 +22,7 @@ def get_locations_near(dbconnect, lat, long, n):
         (long, lat, n))
     myresult = dbconnect.fetchall()
     return myresult
+
 
 def get_averages(dbconnect, day):
     # a safeguards against user inputting a two digit day and month as opposed to single digit
@@ -66,24 +41,16 @@ def get_averages(dbconnect, day):
     else:
         day = parsedDate[2]
 
-    year = parsedDate[3]
-
-    # print("Day: " + day)
-    # print("Month: " + month)
-    # print("Year: " + year)
-
     # getting substring to search in database
     dates = (month + "/" + day + "/%")   # eg dates = 9/2 then day = 9/2/*
     dbconnect.execute("SELECT * from historical_data WHERE date like %s", [dates])
     # fetching all results
     data = dbconnect.fetchall()
 
-    # taking the average of the 3 parameters by iterating through all the fetch rows
-    # using try else to replace None values to 0
+    # taking the sum of the 3 parameters by iterating through all the fetch rows
     avg_precip, avg_air_temp, avg_hum, cnt = 0, 0, 0, 0
     for row in data:
-        #print(row[8], row[15], row[18])
-        #if value not None
+        # Add values if not None
         if row[8]:
             avg_precip += float(row[8])
         if row[15]:
@@ -92,12 +59,10 @@ def get_averages(dbconnect, day):
             avg_hum += float(row[18])
         cnt = cnt + 1
 
-    # rounding to two decimal places because python ugly about it
+    # rounding to two decimal places because python ugly about it and getting average by dividing by num of rows
     avg_precip, avg_air_temp, avg_hum = round(avg_precip/cnt, 2), round(avg_air_temp/cnt, 2), round(avg_hum/cnt, 2)
-    #print(avg_precip, avg_air_temp, avg_hum)
 
     return avg_precip, avg_air_temp, avg_hum
-
 
 
 def lambda_handler(event, context):
@@ -138,14 +103,10 @@ def lambda_handler(event, context):
                 results = get_locations_near(dbcnx, cpp_lat_long[0], cpp_lat_long[1], int(howmany))
                 output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
 
-        # test run
+        # test run for get_averages function
         numdate = "09/03/2052"
         dates = get_averages(dbcnx, numdate)
 
-        #to find the table name or columns of the historical data table
-        # dbcnx.execute("SHOW columns FROM `historical_data`")
-        # for table_name in dbcnx:
-        #     print("COLUMN NAMW: ", table_name)
 
         cnx.close()  # Close the connection
         return {
