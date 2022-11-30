@@ -42,7 +42,7 @@ def get_averages(dbconnect, day):
         day = parsedDate[2]
 
     # getting substring to search in database
-    dates = (month + "/" + day + "/%")   # eg dates = 9/2 then day = 9/2/*
+    dates = (month + "/" + day + "/%")   # eg dates = 9/2 then dates = 9/2/*
     dbconnect.execute("SELECT precip, avg_air_tmp, avg_rel_hum from historical_data WHERE date like %s", [dates])
     # fetching all results
     data = dbconnect.fetchall()
