@@ -17,27 +17,37 @@ def fetch_single_record(dbconnect, id):
 
 
 def fetch_multiple_records(dbconnect, id):
-    t = tuple(id)
-    query = "SELECT * FROM locations_too WHERE id IN {}".format(t)
-    dbconnect.execute(query)
-    myresult = dbconnect.fetchall()
-    return myresult
+    try:
+        t = tuple(id)
+        query = "SELECT * FROM locations_too WHERE id IN {}".format(t)
+        dbconnect.execute(query)
+        myresult = dbconnect.fetchall()
+        # print("type: ", type(myresult))                       # test to see if myresult is a list
+        return myresult
+    except mysql.connector.Error as my_error:
+        print(my_error)
 
 
 def new_record(dbconnect, id):
-    # t = tuple(id)
-    # INSERT INTO cpp4800.locations_too(`lat`, `long`, `name`)VALUES(5.001, 15.001, 'KOEPKE_3');
-    query = "INSERT INTO locations_too(lat,long,name)VALUES(%s,%s,%s)" % (tuple(id))
-    dbconnect.execute(query)
-    dbconnect.commit()
+    t = tuple(id)
+    try:
+        query = "INSERT INTO `cpp4800`.`locations_too`(`id`,`lat`,`long`,`name`)VALUES(%s, %s, %s, '%s')" % t
+        dbconnect.execute(query)
+        myresult = dbconnect.fetchall()
+        # print("type: ", type(myresult))                       # test to see if myresult is a list
+        return myresult
+    except mysql.connector.Error as my_error:
+        print(my_error)
+
 
 
 def delete_records(dbconnect, id):
     try:
         t = tuple(id)
-        query = "DELETE FROM locations_too WHERE id IN {}".format(t)
+        query = "DELETE FROM locations_too WHERE id IN (%s)" % t
         dbconnect.execute(query)
         myresult = dbconnect.fetchall()
+        # print("type: ", type(myresult))                         # test to see if myresult is a list
         return myresult
     except mysql.connector.Error as my_error:
         print(my_error)
@@ -97,11 +107,13 @@ def lambda_handler(event, context):
             location_id = event['stageVariables']['location_id']
             location_id = location_id  # MUST be LIST
             results = delete_records(dbcnx, location_id)
+            cnx.commit()
             output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
         elif action == "add":
             location_id = event['stageVariables']['location_id']
             location_id = location_id  # MUST be LIST
             results = new_record(dbcnx, location_id)
+            cnx.commit()
             output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
         cnx.close()  # Close the connection
         return {
@@ -112,9 +124,9 @@ def lambda_handler(event, context):
 
 payload = {
     "stageVariables": {
-        "action": "add",
+        "action": "delete",
         "target": "multiple_locations",
-        "location_id": [30.01, 30.02, 'TEST_2']
+        "location_id": [315]
     }}
 print("Payload: ", payload)
 output = lambda_handler(payload, None)
