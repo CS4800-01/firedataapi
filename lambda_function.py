@@ -80,33 +80,21 @@ def get_averages(dbconnect, day):
 
     # taking the average of the 3 parameters by iterating through all the fetch rows
     # using try else to replace None values to 0
-    avg_precip, avg_air_temp, avg_hum = 0, 0, 0
+    avg_precip, avg_air_temp, avg_hum, cnt = 0, 0, 0, 0
     for row in data:
-        print(row[8], row[15], row[18])
-        try:
-            avg_precip = avg_precip + float(row[8])
-        except:
-            continue
-        else:
-            avg_precip = avg_precip + 0
-
-        try:
-            avg_air_temp = avg_air_temp + float(row[15])
-        except:
-            continue
-        else:
-            avg_air_temp = avg_air_temp + 0
-
-        try:
-            avg_hum = avg_hum + float(row[18])
-        except:
-             continue
-        else:
-            avg_hum = avg_hum + 0
+        #print(row[8], row[15], row[18])
+        #if value not None
+        if row[8]:
+            avg_precip += float(row[8])
+        if row[15]:
+            avg_air_temp += float(row[15])
+        if row[18]:
+            avg_hum += float(row[18])
+        cnt = cnt + 1
 
     # rounding to two decimal places because python ugly about it
-    avg_precip, avg_air_temp, avg_hum = round(avg_precip, 2), round(avg_air_temp, 2), round(avg_hum, 2)
-    # print(avg_precip, avg_air_temp, avg_hum)
+    avg_precip, avg_air_temp, avg_hum = round(avg_precip/cnt, 2), round(avg_air_temp/cnt, 2), round(avg_hum/cnt, 2)
+    #print(avg_precip, avg_air_temp, avg_hum)
 
     return avg_precip, avg_air_temp, avg_hum
 
@@ -239,4 +227,4 @@ payload = {
     "location_id": "2"
 }}
 output = lambda_handler(payload, None)
-print(output)
+#print(output)
