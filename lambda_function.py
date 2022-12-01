@@ -1,4 +1,3 @@
-import sys
 import json
 import mysql.connector
 from mysql.connector import errorcode
@@ -16,41 +15,28 @@ def fetch_single_record(dbconnect, id):
     return myresult
 
 
-def fetch_multiple_records(dbconnect, id):
-    try:
-        t = tuple(id)
-        query = "SELECT * FROM locations_too WHERE id IN {}".format(t)
-        dbconnect.execute(query)
-        myresult = dbconnect.fetchall()
-        # print("type: ", type(myresult))                       # test to see if myresult is a list
-        return myresult
-    except mysql.connector.Error as my_error:
-        print(my_error)
+def fetch_multiple_records(dbconnect, id_list):
+    implode = ','.join(['%s'] * len(id_list))
+    dbconnect.execute("SELECT * FROM locations WHERE id IN (%s)" % implode, tuple(id_list))
+    myresult = dbconnect.fetchall()
+    return myresult
 
 
-def new_record(dbconnect, id):
-    t = tuple(id)
-    try:
-        query = "INSERT INTO `cpp4800`.`locations_too`(`id`,`lat`,`long`,`name`)VALUES(%s, %s, %s, '%s')" % t
-        dbconnect.execute(query)
-        myresult = dbconnect.fetchall()
-        # print("type: ", type(myresult))                       # test to see if myresult is a list
-        return myresult
-    except mysql.connector.Error as my_error:
-        print(my_error)
+def new_record(dbconnect, record_list):
+    query = "INSERT INTO locations (`lat`, `long`, `name`) VALUES " + ",".join("(%s, %s, %s)" for _ in record_list)
+    flattened_values = [item for sublist in record_list for item in sublist]
+    dbconnect.execute(query, flattened_values)
+    myresult = str(dbconnect.lastrowid)
+    insCount = str(len(record_list))
+    ans = insCount + " records inserted. Last row: " + myresult
+    return ans
 
 
-
-def delete_records(dbconnect, id):
-    try:
-        t = tuple(id)
-        query = "DELETE FROM locations_too WHERE id IN (%s)" % t
-        dbconnect.execute(query)
-        myresult = dbconnect.fetchall()
-        # print("type: ", type(myresult))                         # test to see if myresult is a list
-        return myresult
-    except mysql.connector.Error as my_error:
-        print(my_error)
+def delete_records(dbconnect, id_list):
+    implode = ','.join(['%s'] * len(id_list))
+    dbconnect.execute("DELETE FROM locations WHERE id IN (%s)" % implode, tuple(id_list))
+    delCount = str(len(id_list))
+    return "Deleted " + delCount + " records."
 
 
 def get_locations_near(dbconnect, lat, long, n):
@@ -86,35 +72,32 @@ def lambda_handler(event, context):
         # Implement SWITCH
         if action == "fetch":
             # Implement another SWITCH
-            if target == "all_locations":  # ALL TENANTS
+            if target == "all_locations":
                 results = fetch_all_records(dbcnx)
                 output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
             if target == "single_location" and 'location_id' in event['stageVariables']:  # SINGLE TENANT
                 location_id = event['stageVariables']['location_id']
                 location_id = int(location_id)  # MUST be INT
                 results = fetch_single_record(dbcnx, location_id)
-                output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
-            if target == "multiple_locations" and 'location_id' in event['stageVariables']:  # MULTIPLE TENANTS
-                location_id = event['stageVariables']['location_id']
-                location_id = location_id  # MUST be LIST
-                results = fetch_multiple_records(dbcnx, location_id)
-                output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
+                output = json.dumps(results, default=str)
+            if target == "multiple_locations" and 'location_id_list' in event['stageVariables']:
+                location_id_list = event['stageVariables']['location_id_list']
+                results = fetch_multiple_records(dbcnx, location_id_list)
+                output = json.dumps(results, default=str)
             if target == "geo" and 'howmany' in event['stageVariables']:
                 howmany = event['stageVariables']['howmany']
                 results = get_locations_near(dbcnx, cpp_lat_long[0], cpp_lat_long[1], int(howmany))
-                output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
-        elif action == "delete":
-            location_id = event['stageVariables']['location_id']
-            location_id = location_id  # MUST be LIST
-            results = delete_records(dbcnx, location_id)
+                output = json.dumps(results, default=str)
+        elif action == "delete" and 'location_id_list' in event['stageVariables']:
+            location_id_list = event['stageVariables']['location_id_list']
+            results = delete_records(dbcnx, location_id_list)
             cnx.commit()
-            output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
-        elif action == "add":
-            location_id = event['stageVariables']['location_id']
-            location_id = location_id  # MUST be LIST
-            results = new_record(dbcnx, location_id)
+            output = json.dumps(results, default=str)
+        elif action == "add" and "records" in event['stageVariables']:
+            recordset = [tuple(x) for x in payload['stageVariables']['records']]
+            results = new_record(dbcnx, recordset)
             cnx.commit()
-            output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
+            output = results
         cnx.close()  # Close the connection
         return {
             'statusCode': 200,
@@ -124,10 +107,13 @@ def lambda_handler(event, context):
 
 payload = {
     "stageVariables": {
-        "action": "delete",
+        "action": "fetch",
         "target": "multiple_locations",
-        "location_id": [315]
+        "location_id": 5,
+        "location_id_list": [250, 251],
+        "records": [["111", "-111", "place1"], ["222", "-222", "place2"]]
     }}
 print("Payload: ", payload)
+
 output = lambda_handler(payload, None)
 print(output)
