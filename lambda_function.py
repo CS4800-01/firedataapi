@@ -1,4 +1,6 @@
 import json
+import re
+import requests
 import mysql.connector
 from mysql.connector import errorcode
 
@@ -45,6 +47,48 @@ def get_locations_near(dbconnect, lat, long, n):
         (long, lat, n))
     myresult = dbconnect.fetchall()
     return myresult
+
+
+def get_averages(dbconnect, day):
+    # a safeguards against user inputting a two digit day and month as opposed to single digit
+    properDate = {"01": "1", "02": "2", "03": "3", "04": "4", "05": "5", "06": "6", "07": "7", "08": "8", "09": "9"}
+    # parsing date input for search
+    parsedDate = re.search(r'^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$', day)
+    if parsedDate[1] not in properDate.keys():
+        month = parsedDate[1]
+    else:
+        month = properDate[parsedDate[1]]
+    if parsedDate[2] in properDate.keys():
+        day = properDate[parsedDate[2]]
+    else:
+        day = parsedDate[2]
+    # getting substring to search in database
+    dates = (month + "/" + day + "/%")  # eg dates = 9/2 then dates = 9/2/*
+    dbconnect.execute("SELECT precip, avg_air_tmp, avg_rel_hum from historical_data WHERE date like %s", [dates])
+    # fetching all results
+    data = dbconnect.fetchall()
+    # taking the sum of the 3 parameters by iterating through all the fetch rows
+    avg_precip, avg_air_temp, avg_hum, cnt = 0, 0, 0, 0
+    for row in data:
+        # Add values if not None
+        if row[0]:
+            avg_precip += float(row[0])
+        if row[1]:
+            avg_air_temp += float(row[1])
+        if row[2]:
+            avg_hum += float(row[2])
+        cnt = cnt + 1
+    # rounding to two decimal places because python ugly about it and getting average by dividing by num of rows
+    avg_precip, avg_air_temp, avg_hum = round(avg_precip / cnt, 2), round(avg_air_temp / cnt, 2), round(avg_hum / cnt, 2)
+    return avg_precip, avg_air_temp, avg_hum
+
+
+def predict(dbcnx, date, p30, p60, p90):
+    precip, air, hum = get_averages(dbcnx, date)
+    payload = {"precip": precip, "air": air, "hum": hum, "date": date, "p30": p30, "p60": p60, "p90": p90}
+    curl = requests.post('http://cpp4800.edwin-dev.com/test.php', data=payload)
+    response = curl.text
+    return response
 
 
 def lambda_handler(event, context):
@@ -98,6 +142,14 @@ def lambda_handler(event, context):
             results = new_record(dbcnx, recordset)
             cnx.commit()
             output = results
+        elif action == "predict" and "date" in event['stageVariables'] and "p30" in event['stageVariables'] and "p60" in event['stageVariables'] and "p90" in event['stageVariables']:
+            predictDate = event['stageVariables']['date']
+            p30 = event['stageVariables']['p30']
+            p60 = event['stageVariables']['p60']
+            p90 = event['stageVariables']['p90']
+            results = predict(dbcnx, predictDate, p30, p60, p90)
+            cnx.commit()
+            output = json.loads(results)
         cnx.close()  # Close the connection
         return {
             'statusCode': 200,
@@ -107,13 +159,15 @@ def lambda_handler(event, context):
 
 payload = {
     "stageVariables": {
-        "action": "fetch",
+        "action": "predict",
         "target": "multiple_locations",
         "location_id": 5,
         "location_id_list": [250, 251],
-        "records": [["111", "-111", "place1"], ["222", "-222", "place2"]]
+        "records": [["111", "-111", "place1"], ["222", "-222", "place2"]],
+        "date": "11/22/2052",
+        "p30": 1.1,
+        "p60": 2.2,
+        "p90": 3.3
     }}
-print("Payload: ", payload)
-
 output = lambda_handler(payload, None)
 print(output)
