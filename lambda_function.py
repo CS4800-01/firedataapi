@@ -53,7 +53,7 @@ def get_averages(dbconnect, day):
     # a safeguards against user inputting a two digit day and month as opposed to single digit
     properDate = {"01": "1", "02": "2", "03": "3", "04": "4", "05": "5", "06": "6", "07": "7", "08": "8", "09": "9"}
     # parsing date input for search
-    parsedDate = re.search(r'^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$', day)
+    parsedDate = re.search(r'^(\d{1,2})[\/|\-](\d{1,2})[\/|\-](\d{2,4})$', day)
     if parsedDate[1] not in properDate.keys():
         month = parsedDate[1]
     else:
@@ -119,34 +119,33 @@ def lambda_handler(event, context):
             if target == "all_locations":
                 results = fetch_all_records(dbcnx)
                 output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
-            if target == "single_location" and 'location_id' in event['stageVariables']:  # SINGLE TENANT
-                location_id = event['stageVariables']['location_id']
-                location_id = int(location_id)  # MUST be INT
+            if target == "single_location" and 'location_id' in event['body']:  # SINGLE TENANT
+                location_id = int(event['body']['location_id'])  # MUST be INT
                 results = fetch_single_record(dbcnx, location_id)
                 output = json.dumps(results, default=str)
-            if target == "multiple_locations" and 'location_id_list' in event['stageVariables']:
-                location_id_list = event['stageVariables']['location_id_list']
+            if target == "multiple_locations" and 'locations' in event['body']:
+                location_id_list = event['body']['locations']
                 results = fetch_multiple_records(dbcnx, location_id_list)
                 output = json.dumps(results, default=str)
             if target == "geo" and 'howmany' in event['stageVariables']:
                 howmany = event['stageVariables']['howmany']
                 results = get_locations_near(dbcnx, cpp_lat_long[0], cpp_lat_long[1], int(howmany))
                 output = json.dumps(results, default=str)
-        elif action == "delete" and 'location_id_list' in event['stageVariables']:
-            location_id_list = event['stageVariables']['location_id_list']
+        elif action == "delete" and 'locations' in event['body']:
+            location_id_list = event['body']['locations']
             results = delete_records(dbcnx, location_id_list)
             cnx.commit()
             output = json.dumps(results, default=str)
-        elif action == "add" and "records" in event['stageVariables']:
-            recordset = [tuple(x) for x in payload['stageVariables']['records']]
+        elif action == "add" and "records" in event['body']:
+            recordset = [tuple(x) for x in payload['body']['records']]
             results = new_record(dbcnx, recordset)
             cnx.commit()
             output = results
-        elif action == "predict" and "date" in event['stageVariables'] and "p30" in event['stageVariables'] and "p60" in event['stageVariables'] and "p90" in event['stageVariables']:
-            predictDate = event['stageVariables']['date']
-            p30 = event['stageVariables']['p30']
-            p60 = event['stageVariables']['p60']
-            p90 = event['stageVariables']['p90']
+        elif action == "predict" and "date" in event['body'] and "rain30d" in event['body'] and "rain30d" in event['body'] and "rain30d" in event['body'] and 'locations' in event['body']:
+            predictDate = event['body']['date']
+            p30 = event['body']['rain30d']
+            p60 = event['body']['rain60d']
+            p90 = event['body']['rain90d']
             results = predict(dbcnx, predictDate, p30, p60, p90)
             cnx.commit()
             output = json.loads(results)
@@ -161,13 +160,16 @@ payload = {
     "stageVariables": {
         "action": "predict",
         "target": "multiple_locations",
-        "location_id": 5,
-        "location_id_list": [250, 251],
-        "records": [["111", "-111", "place1"], ["222", "-222", "place2"]],
+    },
+    "body": {
         "date": "11/22/2052",
-        "p30": 1.1,
-        "p60": 2.2,
-        "p90": 3.3
-    }}
+        "rain30d": 1.1,
+        "rain60d": 2.2,
+        "rain90d": 3.3,
+        "location_id": 5,
+        "locations": [250, 251],
+        "records": [["111", "-111", "place1"], ["222", "-222", "place2"]]
+    }
+}
 output = lambda_handler(payload, None)
 print(output)
