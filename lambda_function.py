@@ -5,9 +5,12 @@ import mysql.connector
 from mysql.connector import errorcode
 
 
-def fetch_all_records(dbconnect):
-    dbconnect.execute("SELECT * FROM locations")
+def fetch_all_records(dbconnect, id_only=False):
+    selector = "id" if id_only else "*"
+    dbconnect.execute("SELECT " + selector + " FROM locations")
     myresult = dbconnect.fetchall()
+    if id_only:
+        myresult = [item[0] for item in myresult]
     return myresult
 
 
@@ -93,7 +96,6 @@ def predict(dbcnx, date, p30, p60, p90):
 
 def lambda_handler(event, context):
     action = event['stageVariables']['action']
-    target = event['stageVariables']['target']
     output = "[]"
     cpp_lat_long = ['34.05580382234754', '-117.81919862863134']
     try:
@@ -113,42 +115,47 @@ def lambda_handler(event, context):
     else:
         # Connection success!
         dbcnx = cnx.cursor()
+        postBody = event['body'] if context == "debug" else json.loads(event['body'])
         # Implement SWITCH
         if action == "fetch":
+            target = event['stageVariables']['target']
             # Implement another SWITCH
-            if target == "all_locations":
+            if target == "all_locations" and 'location_id' in postBody and postBody['location_id'] == "all":
                 results = fetch_all_records(dbcnx)
                 output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
-            if target == "single_location" and 'location_id' in event['body']:  # SINGLE TENANT
-                location_id = int(event['body']['location_id'])  # MUST be INT
+            if target == "idlist" and 'location_id' in postBody and postBody['location_id'] == "all":
+                results = fetch_all_records(dbcnx, True)
+                output = json.dumps(results, default=str)  # Must specify default to JSONify Datetime Fields
+            if target == "single_location" and 'location_id' in postBody:  # SINGLE TENANT
+                location_id = int(postBody['location_id'])  # MUST be INT
                 results = fetch_single_record(dbcnx, location_id)
                 output = json.dumps(results, default=str)
-            if target == "multiple_locations" and 'locations' in event['body']:
-                location_id_list = event['body']['locations']
+            if target == "multiple_locations" and 'locations' in postBody:
+                location_id_list = postBody['locations']
                 results = fetch_multiple_records(dbcnx, location_id_list)
                 output = json.dumps(results, default=str)
             if target == "geo" and 'howmany' in event['stageVariables']:
                 howmany = event['stageVariables']['howmany']
                 results = get_locations_near(dbcnx, cpp_lat_long[0], cpp_lat_long[1], int(howmany))
                 output = json.dumps(results, default=str)
-        elif action == "delete" and 'locations' in event['body']:
-            location_id_list = event['body']['locations']
+        elif action == "delete" and 'locations' in postBody:
+            location_id_list = postBody['locations']
             results = delete_records(dbcnx, location_id_list)
             cnx.commit()
             output = json.dumps(results, default=str)
-        elif action == "add" and "records" in event['body']:
-            recordset = [tuple(x) for x in payload['body']['records']]
+        elif action == "add" and "records" in postBody:
+            recordset = [tuple(x) for x in postBody['records']]
             results = new_record(dbcnx, recordset)
             cnx.commit()
-            output = results
-        elif action == "predict" and "date" in event['body'] and "rain30d" in event['body'] and "rain30d" in event['body'] and "rain30d" in event['body'] and 'locations' in event['body']:
-            predictDate = event['body']['date']
-            p30 = event['body']['rain30d']
-            p60 = event['body']['rain60d']
-            p90 = event['body']['rain90d']
+            output = json.dumps(results, default=str)
+        elif action == "predict" and "date" in postBody and "rain30d" in postBody and "rain30d" in postBody and "rain30d" in postBody:
+            predictDate = postBody['date']
+            p30 = postBody['rain30d']
+            p60 = postBody['rain60d']
+            p90 = postBody['rain90d']
             results = predict(dbcnx, predictDate, p30, p60, p90)
             cnx.commit()
-            output = json.loads(results)
+            output = results
         cnx.close()  # Close the connection
         return {
             'statusCode': 200,
@@ -158,18 +165,17 @@ def lambda_handler(event, context):
 
 payload = {
     "stageVariables": {
-        "action": "predict",
-        "target": "multiple_locations",
+        "action": "fetch",
+        "target": "idlist",
     },
     "body": {
         "date": "11/22/2052",
         "rain30d": 1.1,
         "rain60d": 2.2,
         "rain90d": 3.3,
-        "location_id": 5,
-        "locations": [250, 251],
+        "location_id": "all",
         "records": [["111", "-111", "place1"], ["222", "-222", "place2"]]
     }
 }
-output = lambda_handler(payload, None)
-print(output)
+#output = lambda_handler(payload, "debug")
+#print(output)
