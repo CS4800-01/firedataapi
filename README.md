@@ -5,6 +5,8 @@ https://ldrael3t7d.execute-api.us-west-2.amazonaws.com/predict/firedata
 Expected Payload Body:
 {"date": "11/22/2052", "rain30d": 1.1, "rain60d": 2.2, "rain90d": 3.3}
 
+Expected Output:
+[[2,0.86],[5,0.84],[6,0.51],[7,0.59],[8,0.94], ...]
 
 
 # FETCH SINGLE RECORD
