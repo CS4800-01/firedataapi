@@ -52,19 +52,24 @@ def get_locations_near(dbconnect, lat, long, n):
     return myresult
 
 
-def get_averages(dbconnect, day):
+def parsedate(date, withZeroes=False):
     # a safeguards against user inputting a two digit day and month as opposed to single digit
-    properDate = {"01": "1", "02": "2", "03": "3", "04": "4", "05": "5", "06": "6", "07": "7", "08": "8", "09": "9"}
+    properdate = {"01": "1", "02": "2", "03": "3", "04": "4", "05": "5", "06": "6", "07": "7", "08": "8", "09": "9"}
     # parsing date input for search
-    parsedDate = re.search(r'^(\d{1,2})[\/|\-](\d{1,2})[\/|\-](\d{2,4})$', day)
-    if parsedDate[1] not in properDate.keys():
-        month = parsedDate[1]
+    parseddate = re.search(r'^(\d{1,2})[\/|\-](\d{1,2})[\/|\-](\d{2,4})$', date)
+    if parseddate[1] not in properdate.keys() or withZeroes:
+        month = parseddate[1]
     else:
-        month = properDate[parsedDate[1]]
-    if parsedDate[2] in properDate.keys():
-        day = properDate[parsedDate[2]]
+        month = properdate[parseddate[1]]
+    if parseddate[2] in properdate.keys() and not withZeroes:
+        day = properdate[parseddate[2]]
     else:
-        day = parsedDate[2]
+        day = parseddate[2]
+    return parseddate[3], month, day
+
+
+def get_averages(dbconnect, day):
+    year, month, day = parsedate(day)
     # getting substring to search in database
     dates = (month + "/" + day + "/%")  # eg dates = 9/2 then dates = 9/2/*
     dbconnect.execute("SELECT precip, avg_air_tmp, avg_rel_hum from historical_data WHERE date like %s", [dates])
@@ -87,9 +92,10 @@ def get_averages(dbconnect, day):
 
 
 def predict(dbcnx, date, p30, p60, p90):
+    year, month, day = parsedate(date, True)
     precip, air, hum = get_averages(dbcnx, date)
-    payload = {"precip": precip, "air": air, "hum": hum, "date": date, "p30": p30, "p60": p60, "p90": p90}
-    curl = requests.post('http://cpp4800.edwin-dev.com/test.php', data=payload)
+    payload = {"precip": precip, "air": air, "hum": hum, "date": year + month + day, "p30": p30, "p60": p60, "p90": p90}
+    curl = requests.post('https://bfzp34g6h0.execute-api.us-east-1.amazonaws.com/test/predict-fire', json=payload)
     response = curl.text
     return response
 
@@ -165,11 +171,11 @@ def lambda_handler(event, context):
 
 payload = {
     "stageVariables": {
-        "action": "fetch",
-        "target": "idlist",
+        "action": "predict",
+        "target": "idlist"
     },
     "body": {
-        "date": "11/22/2052",
+        "date": "08/02/2030",
         "rain30d": 1.1,
         "rain60d": 2.2,
         "rain90d": 3.3,
