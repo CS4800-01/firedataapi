@@ -23,7 +23,7 @@ Expected Output:
 
 # FETCH MULTIPLE RECORDS
 Endpoint:
-https://ldrael3t7d.execute-api.us-west-2.amazonaws.com/get_single_location/firedata
+https://ldrael3t7d.execute-api.us-west-2.amazonaws.com/get_multiple_locations/firedata
 
 Expected Payload Body:
 {"locations": [250, 251]}
